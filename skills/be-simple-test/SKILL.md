@@ -1,16 +1,17 @@
 ---
 name: be-simple-test
-description: Backend URL에서 실제 호출되는 실행 경로를 추적하고 MyBatis XML의 실제 Statement Body까지만 읽어 SQL Read 비용을 측정한다.
+description: Backend URL에서 실제 호출되는 실행 경로를 추적하고 Mapper는 MyBatis XML 파일 위치와 Statement ID까지만 확인하며 Response와 Exception 흐름을 분석한다.
 argument-hint: "<HTTP Method|UNKNOWN> <Backend URL>"
 allowed-tools: Grep, Read
 ---
 
-# BE Simple Test v0.3 - MyBatis Statement Read
+# BE Simple Test v0.3 - Response / Exception
 
 ## 1. 목적
 
 Backend URL에서 시작하여
-실제 Source 호출 관계만 따라간다.
+실제 Source 호출 관계만 따라가며
+Backend 실행 흐름을 확인한다.
 
 기본 흐름:
 
@@ -21,36 +22,48 @@ Backend URL
 → Local/private Method
 → 다른 Business Service
 → Mapper
-→ MyBatis XML
+→ MyBatis XML 위치
 → Statement ID
-→ Statement Body Read
-→ 종료
+→ Response
+→ Exception
 
-이번 버전의 목적은 하나다.
+핵심 원칙:
 
-MyBatis Statement Body를 읽는 비용을 측정한다.
-
-SQL 내용은 읽지만
-SQL을 분석하거나 해석하지 않는다.
+검색 범위는 좁게 유지하고
+실제 호출 깊이는 끝까지 따라간다.
 
 ---
 
-## 2. 기준 버전
+## 2. MyBatis 정책
 
-이전 v0.2 테스트:
+MyBatis는 다음까지만 확인한다.
 
-MyBatis XML
-+
-Statement ID
+Mapper Type
+→ Mapper Method
+→ XML 파일 위치
+→ Statement ID
 
-까지만 확인했을 때:
+여기서 종료한다.
 
-57초
+다음은 분석하지 않는다.
 
-이번 버전은
-v0.2에 Statement Body Read만 추가한다.
+- SQL Body
+- SQL Query
+- SELECT 내용
+- INSERT 내용
+- UPDATE 내용
+- DELETE 내용
+- Main Table
+- JOIN
+- WHERE
+- Parameter
+- Dynamic SQL
+- include 내부
+- resultMap
+- Oracle Metadata
 
-다른 분석 범위는 늘리지 않는다.
+쿼리를 확인하기 위해
+Statement Body를 Read하지 않는다.
 
 ---
 
@@ -70,42 +83,46 @@ UNKNOWN /material/create
 
 ---
 
-## 4. 이번 버전에서 추가되는 것
+## 4. 분석 범위
 
-v0.2:
+실제 Source에 존재하는 경우 다음을 추적한다.
+
+Controller
+
+Service
+
+ServiceImpl
+
+Local/private Method
+
+다른 Business Service
 
 Mapper
-→ XML
-→ Statement ID
-→ STOP
 
-v0.3:
+MyBatis XML 위치
 
-Mapper
-→ XML
-→ Statement ID
-→ Statement Body Read
-→ STOP
+Statement ID
 
-추가 기능은 이것 하나뿐이다.
+Response
+
+Exception
+
+SAP/RFC/External 호출 존재 여부
+
+모든 단계가 반드시 존재할 필요는 없다.
+
+실제 호출되는 흐름만 분석한다.
 
 ---
 
-## 5. 이번 버전에서 하지 않는 것
+## 5. 하지 않는 것
 
 다음은 수행하지 않는다.
 
-- SQL 의미 해석
-- SQL 요약
-- Main Table 분석
-- JOIN 분석
-- WHERE 분석
-- Parameter 분석
-- Dynamic SQL 분석
-- include 내부 분석
-- resultMap 분석
-- Request → SQL Mapping
+- SQL 분석
+- SQL Body Read
 - Oracle Metadata
+- Database Metadata
 - BE-REFERENCE
 - Markdown 문서 생성
 - Write
@@ -114,63 +131,13 @@ Mapper
 - Code Index
 - Mapper.java 상세 분석
 - Dependency/JAR 내부 분석
-
-Statement Body를 읽은 뒤
-SQL에 대한 추가 판단을 하지 않는다.
-
----
-
-# 핵심 규칙
-
-## 6. 실행 경로
-
-다음 실제 실행 경로를 따라간다.
-
-Controller
-→ Service
-→ ServiceImpl
-→ 실제 Local/private Method
-→ 실제 Business Service
-→ 실제 Mapper
-→ MyBatis XML
-→ 실제 Statement
-→ Statement Body
-
-모든 단계가 반드시 존재할 필요는 없다.
-
-Source에 실제 존재하는 흐름만 추적한다.
-
----
-
-## 7. 실제 호출 기준
-
-현재 Method에서
-실제로 호출되는 코드만 따라간다.
-
-관련 있어 보인다는 이유로
-Source를 추가 탐색하지 않는다.
-
----
-
-## 8. 중복 분석 금지
-
-이미 확인한:
-
-Class + Method
-
-Mapper Type + Mapper Method
-
-Mapper Type + XML
-
-XML + Statement ID
-
-조합은 다시 탐색하지 않는다.
+- 관련 Source 사전 수집
 
 ---
 
 # Source Boundary
 
-## 9. Java
+## 6. Java
 
 Java Source:
 
@@ -184,22 +151,20 @@ CURRENT_PROJECT
 
 ---
 
-## 10. Resources
+## 7. Resources
 
-MyBatis:
+MyBatis 탐색 범위:
 
 CURRENT_PROJECT/src/main/resources/**
 
-안에서만 탐색한다.
-
-다른 Backend 프로젝트로
-Resources 검색 범위를 확장하지 않는다.
+다른 Backend 프로젝트의 Resources까지
+검색 범위를 확장하지 않는다.
 
 ---
 
-## 11. Hard Exclude
+## 8. Hard Exclude
 
-탐색하지 않는다.
+다음은 탐색하지 않는다.
 
 - docs/**
 - **/sample/**
@@ -220,35 +185,35 @@ Resources 검색 범위를 확장하지 않는다.
 - **/BOOT-INF/**
 - **/WEB-INF/lib/**
 
+Dependency/JAR 내부로 이동하지 않는다.
+
 ---
 
 # Search
 
-## 12. 탐색 방식
+## 9. 탐색 방식
+
+항상:
 
 정확한 Symbol
-
 → Grep
-
 → 위치 확보
-
-→ 필요한 범위만 Read
-
+→ 필요한 부분만 Read
 → 다음 Symbol
 
 순서로 진행한다.
 
 ---
 
-## 13. 금지
+## 10. 금지
 
-다음은 금지한다.
+다음 방식은 사용하지 않는다.
 
 Repository 전체 구조 파악
 
-전체 Java 목록 수집
+전체 Java 파일 목록 수집
 
-전체 XML 목록 수집
+전체 XML 파일 목록 수집
 
 전체 Service 목록 수집
 
@@ -256,16 +221,39 @@ Repository 전체 구조 파악
 
 관련 Source 사전 탐색
 
+관련 있어 보인다는 이유의 Source 탐색
+
 전체 파일 기본 Read
+
+---
+
+## 11. Cache
+
+이미 확보한 정보는 재사용한다.
+
+다음 조합은 다시 분석하지 않는다.
+
+Class + Method
+
+Mapper Type + Mapper Method
+
+Mapper Type + XML
+
+XML + Statement ID
+
+같은 Symbol을 반복 Grep하지 않는다.
 
 ---
 
 # Controller
 
-## 14. Controller
+## 12. Controller 탐색
 
-Backend URL과 HTTP Method로
+Backend URL에서
+식별력이 높은 Mapping 문자열로
 Controller를 찾는다.
+
+확인:
 
 class-level mapping
 
@@ -273,16 +261,28 @@ class-level mapping
 
 method-level mapping
 
-을 확인한다.
++
 
-UNKNOWN이면
-Annotation에서 Method를 확인한다.
+HTTP Method
+
+HTTP Method가 UNKNOWN이면
+Mapping Annotation에서 확인한다.
 
 ---
 
-## 15. Controller에서 확보
+## 13. Controller 분석
 
-다음만 확보한다.
+실제 요청을 처리하는
+Controller Method만 읽는다.
+
+전체 Controller 파일을
+기본적으로 읽지 않는다.
+
+---
+
+## 14. Controller에서 확보
+
+다음을 확보한다.
 
 Controller Class
 
@@ -292,22 +292,28 @@ Service Type
 
 Service Method
 
+Request 전달 방식
+
+Response 방식
+
 CURRENT_PROJECT
 
 ---
 
 # Service
 
-## 16. Service
+## 15. Service
 
 Controller에서 실제 호출되는
 Service만 따라간다.
+
+전체 Service 목록을 찾지 않는다.
 
 실제 호출된 Method만 확인한다.
 
 ---
 
-## 17. ServiceImpl
+## 16. ServiceImpl
 
 정확한 Service 구현체만 찾는다.
 
@@ -318,12 +324,24 @@ Service만 따라간다.
 
 ---
 
-# Local/private
+# Execution Flow
+
+## 17. 실제 호출 기준
+
+현재 Method에서
+실제로 호출되는 코드만 추적한다.
+
+관련 있어 보인다는 이유로
+다른 Source를 찾지 않는다.
+
+---
+
+# Local/private Method
 
 ## 18. Local/private Method
 
 현재 실행 경로에서
-실제로 호출된 Local/private Method만 따라간다.
+실제로 호출되는 Local/private Method만 따라간다.
 
 동일 Class 안에서
 실제 선언이 확인되는 Method만 처리한다.
@@ -335,8 +353,11 @@ Local Method 목록을
 
 ## 19. Local 중복 방지
 
-이미 분석한 Local Method는
-다시 읽지 않는다.
+이미 분석한:
+
+Class + Method
+
+는 다시 읽지 않는다.
 
 순환 호출이면
 호출 관계만 기록한다.
@@ -348,7 +369,7 @@ Local Method 목록을
 ## 20. 다른 Business Service
 
 현재 Method에서 실제 호출되는
-Business Service만 따라간다.
+다른 Business Service만 따라간다.
 
 예:
 
@@ -360,17 +381,25 @@ Service A
 계속 따라간다.
 
 전체 Service 목록을
-검색하지 않는다.
+미리 검색하지 않는다.
 
 ---
 
-## 21. Service 중복 방지
+## 21. Service 왕복
 
-이미 분석한:
+실제 Source에 다음과 같은 흐름이 있으면
+그대로 따라간다.
+
+Service A
+→ Service B
+→ Service A의 다른 Method
+→ Service C
+
+이미 분석한 동일:
 
 Class + Method
 
-는 다시 읽지 않는다.
+만 다시 읽지 않는다.
 
 ---
 
@@ -394,7 +423,7 @@ Mapper Method
 ## 23. Mapper Type
 
 현재 읽은 Source에서
-Mapper Type이 확인되면 재사용한다.
+Mapper Type이 확인되면 그대로 사용한다.
 
 확인되지 않은 경우에만
 현재 ServiceImpl 파일 안에서
@@ -421,9 +450,23 @@ ServiceImpl
 
 ---
 
-# MyBatis XML
+# MyBatis
 
-## 25. XML 탐색
+## 25. MyBatis 목표
+
+MyBatis에서는 오직:
+
+XML 파일 위치
+
++
+
+Statement ID
+
+만 확인한다.
+
+---
+
+## 26. XML 탐색
 
 Mapper Type으로
 정확한 namespace를 찾는다.
@@ -438,24 +481,20 @@ namespace="...MaterialMapper"
 
 ---
 
-## 26. XML 확정
+## 27. XML 확정
 
 정확한 Mapper XML이 발견되면
 다른 XML 탐색을 즉시 중단한다.
 
-Mapper Type:
-
-MaterialMapper
-
-와 연결되는 XML을 한 번 찾으면
-같은 Mapper Type에서는 재사용한다.
+동일 Mapper Type의 XML은
+다시 검색하지 않는다.
 
 ---
 
-## 27. Statement ID
+## 28. Statement ID
 
 확정된 XML 안에서만
-Mapper Method와 같은 Statement ID를 찾는다.
+Mapper Method와 동일한 Statement ID를 찾는다.
 
 예:
 
@@ -467,192 +506,307 @@ selectMaterial
 
 id="selectMaterial"
 
-을 찾는다.
+을 확인한다.
 
 ---
 
-# Statement Body Read
+## 29. Statement Body 금지
 
-## 28. 핵심 테스트
-
-Statement ID가 확인되면
-해당 Statement Body를 읽는다.
-
-예:
+다음이 확인되면:
 
 <select id="selectMaterial">
 
-부터:
+또는:
 
-</select>
-
-까지.
+<insert id="insertMaterial">
 
 또는:
 
-<insert>
-→ </insert>
+<update id="updateMaterial">
 
-<update>
-→ </update>
+또는:
 
-<delete>
-→ </delete>
+<delete id="deleteMaterial">
 
-까지.
+Statement가 존재한다고 판단한다.
 
----
+여기서 MyBatis 분석을 종료한다.
 
-## 29. 부분 Read
-
-Statement 시작 위치에서:
-
-약 30줄
-
-만 먼저 Read한다.
-
-종료 Tag가 보이면
-즉시 Read를 종료한다.
+Statement Body를 Read하지 않는다.
 
 ---
 
-## 30. 추가 Read
+## 30. XML 전체 Read 금지
 
-30줄 안에 종료 Tag가 없을 때만
-다음 범위를 읽는다.
+MyBatis XML 전체를 읽지 않는다.
 
-추가 Read 역시
-필요한 범위만 수행한다.
+Statement 주변 Read도 하지 않는다.
 
-전체 XML 파일을 읽지 않는다.
+Grep 결과로:
 
----
+XML 위치
 
-## 31. 긴 Statement
++
 
-Statement가 길어도
-종료 Tag를 찾기 위해서만
-추가 Read한다.
+Statement ID
 
-SQL을 이해하기 위해
-범위를 추가 확장하지 않는다.
+가 확인되면 충분하다.
 
 ---
 
-## 32. SQL 분석 금지
+# Response
 
-Statement Body를 읽은 후
-다음을 분석하지 않는다.
+## 31. Response 분석 목적
 
-SELECT 의미
+실제 Backend 실행 결과가
+Controller까지 어떻게 반환되는지 확인한다.
 
-INSERT 의미
+Response를 분석하기 위해
+새로운 Source 탐색 범위를 만들지 않는다.
 
-UPDATE 의미
-
-DELETE 의미
-
-Table
-
-JOIN
-
-WHERE
-
-Parameter
-
-Dynamic SQL
-
-Business 의미
+이미 읽고 있는 실행 경로를 사용한다.
 
 ---
 
-## 33. Dynamic SQL
+## 32. Service Return
 
-다음 Tag가 보여도
-분석하지 않는다.
+Service / ServiceImpl / Local Method에서
+실제로 확인되는 Return을 기록한다.
 
-<if>
+예:
 
-<choose>
+return result;
 
-<when>
+return response;
 
-<otherwise>
+return list;
 
-<foreach>
+return count;
 
-단순히 Statement Body의 일부로 읽고
-추가 탐색하지 않는다.
+return null;
 
----
-
-## 34. include
-
-<include refid="..."/>
-
-가 보여도
-refid만 따라가지 않는다.
-
-include Source를 찾지 않는다.
+void
 
 ---
 
-## 35. resultMap
+## 33. Return 전달
 
-resultMap이 보여도
-정의로 이동하지 않는다.
+다음과 같은 실제 흐름이 있으면 기록한다.
+
+ServiceImpl
+
+return result
+
+↓
+
+Controller
+
+result = service.method(...)
+
+↓
+
+Controller Response
+
+return result
 
 ---
 
-## 36. Statement Cache
+## 34. Controller Response
 
-동일:
+Controller에서 실제 확인되는
+Response 형태를 기록한다.
 
-XML + Statement ID
+예:
 
-를 이미 읽었다면
-다시 Read하지 않는다.
+return result;
+
+return ResponseEntity.ok(result);
+
+return response;
+
+void
+
+Model / Map / DTO 반환
+
+실제 Source에 보이는 형태만 기록한다.
+
+---
+
+## 35. Response DTO
+
+Response Type이
+현재 읽은 Source에서 명확하면 이름만 기록한다.
+
+예:
+
+MaterialResponse
+
+List<MaterialResponse>
+
+Map<String, Object>
+
+ResponseEntity<MaterialResponse>
+
+DTO 내부 필드 분석을 위해
+별도 Source로 이동하지 않는다.
+
+이번 버전에서는
+Response DTO 상세 분석을 하지 않는다.
+
+---
+
+# Exception
+
+## 36. Exception 분석 목적
+
+실제 실행 경로에서
+직접 확인되는 예외 흐름만 기록한다.
+
+Exception을 찾기 위해
+Repository 전체를 검색하지 않는다.
+
+---
+
+## 37. 직접 Throw
+
+현재 읽은 Method에서:
+
+throw
+
+가 실제 확인되면 기록한다.
+
+예:
+
+if (material == null) {
+    throw new BusinessException(...);
+}
+
+기록:
+
+Condition:
+material == null
+
+Exception:
+BusinessException
+
+---
+
+## 38. Catch
+
+현재 실행 경로에서:
+
+try / catch
+
+가 실제 확인되면
+해당 처리만 기록한다.
+
+예:
+
+catch (Exception e) {
+    throw new BusinessException(...);
+}
+
+기록:
+
+Catch:
+Exception
+
+Throw:
+BusinessException
+
+---
+
+## 39. Exception Class 내부 금지
+
+BusinessException
+
+CustomException
+
+RuntimeException
+
+등이 보여도
+Exception Class 정의를 찾아가지 않는다.
+
+현재 Source에서 확인되는 정보만 사용한다.
+
+---
+
+## 40. Global Exception Handler
+
+이번 버전에서는:
+
+@ControllerAdvice
+
+@ExceptionHandler
+
+GlobalExceptionHandler
+
+등을 별도로 찾지 않는다.
+
+실제 실행 경로 밖의
+전역 예외 처리는 분석하지 않는다.
+
+---
+
+## 41. Validation과 Exception
+
+실제 조건과 Throw가 연결되어 있으면
+간단히 기록한다.
+
+예:
+
+materialId == null
+
+→ BusinessException
+
+별도의 Validation 분석을 위해
+추가 Source를 찾지 않는다.
 
 ---
 
 # External
 
-## 37. SAP / RFC / External
+## 42. SAP / RFC / External
 
-실제 실행 흐름에서 발견되면
-호출 이름만 기록한다.
-
-내부 Source로 들어가지 않는다.
+실제 실행 경로에서
+외부 호출이 발견되면 기록한다.
 
 예:
 
 sapService.send(...)
 
-External Call:
-sapService.send
+rfcClient.execute(...)
+
+externalClient.call(...)
+
+이번 버전에서는
+호출 이름까지만 기록한다.
+
+외부 연동 내부 Source로
+추가 이동하지 않는다.
 
 ---
 
 # Evidence
 
-## 38. Evidence
+## 43. Evidence
 
-분석하면서 이미 확인한 위치를 사용한다.
+분석하면서 이미 확인한 Source 위치를 사용한다.
 
-Evidence 때문에
+Evidence를 만들기 위해
 추가 Grep 또는 Read를 하지 않는다.
 
 형식:
 
 프로젝트 루트 기준 상대경로:라인범위
 
-절대경로는 사용하지 않는다.
+절대경로는 출력하지 않는다.
 
 ---
 
 # Output
 
-## 39. 출력
+## 44. 결과
 
 파일을 생성하지 않는다.
 
@@ -671,6 +825,40 @@ URL:
 {BACKEND_URL}
 
 
+EXECUTION FLOW
+
+{CONTROLLER_CLASS}#{CONTROLLER_METHOD}
+
+↓
+
+{SERVICE_TYPE}#{SERVICE_METHOD}
+
+↓
+
+{실제 Local/private Method}
+
+↓
+
+{실제 다른 Business Service}
+
+↓
+
+{MAPPER_TYPE}#{MAPPER_METHOD}
+
+↓
+
+MyBatis
+{XML_PATH}#{STATEMENT_ID}
+
+↓
+
+{RETURN}
+
+↓
+
+{CONTROLLER_RESPONSE}
+
+
 CONTROLLER
 
 Class:
@@ -679,46 +867,75 @@ Class:
 Method:
 {CONTROLLER_METHOD}
 
+Response:
+{RESPONSE}
+
 Evidence:
 {PATH:LINES}
 
 
-SERVICE
+SERVICE FLOW
 
-Type:
-{SERVICE_TYPE}
+1.
+
+Class:
+{CLASS}
 
 Method:
-{SERVICE_METHOD}
+{METHOD}
 
+Calls:
+{CALLS}
 
-EXECUTION FLOW
+Return:
+{RETURN}
 
-{CONTROLLER_CLASS}#{CONTROLLER_METHOD}
-
-→ {SERVICE}
-
-→ {실제 Local/private 또는 Business Service}
-
-→ {MAPPER_TYPE}#{MAPPER_METHOD}
-
-→ {XML_PATH}#{STATEMENT_ID}
+Evidence:
+{PATH:LINES}
 
 
 LOCAL METHODS
 
-실제 추적된 경우만 출력한다.
+실제 존재하는 경우만 출력한다.
 
-- {CLASS}#{METHOD}
-- Evidence: {PATH:LINES}
+1.
+
+Class:
+{CLASS}
+
+Method:
+{METHOD}
+
+Called From:
+{CALLER}
+
+Return:
+{RETURN}
+
+Evidence:
+{PATH:LINES}
 
 
 BUSINESS SERVICES
 
-실제 추적된 경우만 출력한다.
+실제 존재하는 경우만 출력한다.
 
-- {SERVICE}#{METHOD}
-- Evidence: {PATH:LINES}
+1.
+
+Service:
+{SERVICE}
+
+Method:
+{METHOD}
+
+Called From:
+{CALLER}
+
+Return:
+{RETURN}
+
+Evidence:
+{PATH:LINES}
 
 
 MAPPERS
@@ -734,41 +951,63 @@ Method:
 XML:
 {XML_PATH}
 
-Statement:
+Statement ID:
 {STATEMENT_ID}
 
-Statement Lines:
-{START_LINE}-{END_LINE}
+SQL:
+NOT ANALYZED
+
+Evidence:
+{PATH:LINE}
+
+
+RESPONSE
+
+Service Return:
+{RETURN}
+
+Controller Response:
+{RESPONSE}
+
+Response Type:
+{TYPE}
 
 Evidence:
 {PATH:LINES}
 
 
-STATEMENT BODY
+EXCEPTION
+
+실제 확인된 경우만 출력한다.
 
 1.
 
-Mapper:
-{MAPPER_TYPE}#{MAPPER_METHOD}
+Method:
+{METHOD}
 
-Statement:
-{STATEMENT_ID}
+Condition:
+{CONDITION}
 
-Read:
-YES
+Throw:
+{EXCEPTION}
 
-Lines:
-{START_LINE}-{END_LINE}
+Evidence:
+{PATH:LINES}
 
-SQL Analysis:
-SKIPPED
+확인된 Exception이 없으면:
+
+NONE
 
 
 EXTERNAL CALLS
 
-실제 발견된 경우만 출력한다.
+실제 확인된 경우만 출력한다.
 
 - {CALL}
+
+없으면:
+
+NONE
 
 
 STATUS
@@ -777,14 +1016,14 @@ COMPLETED
 
 ---
 
-# 실패
+# Failure
 
-## 40. 탐색 실패
+## 45. 탐색 실패
 
-Source를 찾지 못해도
+특정 Source를 찾지 못해도
 검색 범위를 무작정 확장하지 않는다.
 
-필요하면 다음을 기록한다.
+필요하면 기록한다.
 
 CONTROLLER_NOT_FOUND
 
@@ -798,35 +1037,47 @@ MAPPER_XML_NOT_FOUND
 
 STATEMENT_NOT_FOUND
 
-STATEMENT_END_NOT_FOUND
-
 ---
 
 # STOP
 
-## 41. 종료 조건
+## 46. 종료
 
-실제 Mapper 호출에 대해:
+실제 실행 흐름에 대해:
 
-Mapper XML 확인
+Controller
 
-+
+Service
 
-Statement ID 확인
+Local/private Method
 
-+
+Business Service
 
-Statement Body Read
+Mapper
 
-가 끝나면 종료한다.
+MyBatis XML 위치
 
-SQL 분석을 시작하지 않는다.
+Statement ID
+
+Response
+
+Exception
+
+확인이 끝나면 즉시 종료한다.
+
+SQL을 읽지 않는다.
+
+Statement Body를 읽지 않는다.
 
 include를 따라가지 않는다.
 
 resultMap을 따라가지 않는다.
 
-추가 Source를 탐색하지 않는다.
+Exception Class를 찾아가지 않는다.
+
+Global Exception Handler를 찾지 않는다.
+
+추가 후보 Source를 탐색하지 않는다.
 
 BE-REFERENCE를 읽지 않는다.
 
