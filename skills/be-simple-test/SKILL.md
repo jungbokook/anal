@@ -1,44 +1,71 @@
 ---
 name: be-simple-test
-description: Backend URL에서 시작하여 실제 호출되는 Backend 실행 경로만 끝까지 추적하는 최소 규칙 성능 테스트.
+description: Backend URL에서 실제 호출되는 실행 경로를 추적하되 MyBatis는 XML 파일과 Statement ID까지만 확인하여 탐색 성능을 측정한다.
 argument-hint: "<HTTP Method|UNKNOWN> <Backend URL>"
 allowed-tools: Grep, Read
 ---
 
-# BE Simple Test v0.1
+# BE Simple Test v0.2 - MyBatis Minimal
 
-## 목적
+## 1. 목적
 
 Backend URL에서 시작하여
-실제 Source의 호출 관계만 따라가며
-Backend 실행 흐름을 끝까지 확인한다.
+실제 Source 호출 관계만 따라간다.
 
-복잡한 단계별 탐색 절차를 사용하지 않는다.
+이번 버전의 핵심 테스트:
 
-입력:
+MyBatis SQL 분석을 제거하고
 
-HTTP Method + Backend URL
+Mapper
+→ XML 파일
+→ Statement ID
 
-출력:
+까지만 확인한다.
 
-실제 Backend 실행 흐름
+이를 통해 MyBatis XML/SQL 분석이
+전체 Backend 분석 시간의 병목인지 확인한다.
 
 ---
 
-## 분석 범위
+## 2. 입력
 
-다음 흐름을 실제 호출이 존재하는 만큼 추적한다.
+HTTP Method
 
-Controller
+Backend URL
+
+예:
+
+POST /material/create
+
+또는:
+
+UNKNOWN /material/create
+
+---
+
+## 3. 분석 흐름
+
+실제 호출이 존재하는 만큼 다음을 추적한다.
+
+Backend URL
+
+→ Controller
+
 → Service
+
 → ServiceImpl
+
 → Local/private Method
+
 → 다른 Business Service
+
 → Mapper
+
 → MyBatis XML
-→ SQL
-→ SAP/RFC/외부 연동
-→ Return / Exception
+
+→ Statement ID
+
+→ 종료
 
 모든 단계가 반드시 존재할 필요는 없다.
 
@@ -46,70 +73,94 @@ Controller
 
 ---
 
-## 핵심 규칙
+## 4. 이번 버전에서 하지 않는 것
+
+다음은 수행하지 않는다.
+
+- SQL 내용 Read
+- SQL 해석
+- SELECT / INSERT / UPDATE / DELETE 분석
+- Main Table 분석
+- JOIN 분석
+- WHERE 분석
+- Parameter 분석
+- Dynamic SQL 분석
+- include 분석
+- resultMap 분석
+- Oracle Metadata
+- BE-REFERENCE
+- Markdown 문서 생성
+- Write
+- Agent
+- 병렬 Worker
+- Code Index
+- Mapper.java 상세 분석
+- Dependency/JAR 내부 분석
+
+MyBatis는:
+
+XML 파일
+
++
+
+Statement ID
+
+확인 즉시 종료한다.
+
+---
+
+## 5. 핵심 규칙
 
 1. Backend URL과 HTTP Method로 Controller를 찾는다.
 
-2. Controller에서 실제 호출되는 Service부터 실행 흐름을 따라간다.
+2. Controller에서 실제 호출되는 Service를 따라간다.
 
 3. 현재 Method에서 실제 호출되는 코드만 추적한다.
 
-4. 같은 클래스의 Local/private Method가 실제 호출되면 따라간다.
+4. 같은 Class의 Local/private Method가 실제 호출되면 따라간다.
 
 5. 다른 Business Service가 실제 호출되면 해당 Method를 따라간다.
 
-6. Mapper 호출은 Mapper.java 전체를 분석하지 말고 가능한 경우 MyBatis XML의 실제 Statement로 바로 이동한다.
+6. Mapper 호출이 발견되면 Mapper Type과 Mapper Method를 확보한다.
 
-7. MyBatis XML에서는 실제 호출된 Statement와 SQL만 확인한다.
+7. Mapper Type으로 MyBatis XML을 찾는다.
 
-8. SAP/RFC/외부 연동은 실제 호출이 확인된 경우에만 추적한다.
+8. 해당 XML에서 Mapper Method와 같은 Statement ID가 존재하는지만 확인한다.
 
-9. 이미 분석한 Class + Method는 다시 읽지 않는다.
+9. Statement ID가 확인되면 해당 Statement Body를 읽지 않는다.
 
-10. 실제 호출 관계가 확인되지 않은 Source는 탐색하지 않는다.
-
----
-
-## 탐색 원칙
-
-검색 범위는 좁게 유지하고
-호출 깊이는 실제 실행 경로 끝까지 따라간다.
-
-정확한 Symbol을 우선 사용한다.
-
-필요한 위치를 찾으면
-Method 또는 Statement 주변만 읽는다.
-
-전체 파일을 기본적으로 읽지 않는다.
-
-이미 확보한:
-
-- 파일
-- Class
-- Method
-- Mapper
-- XML
-
-정보는 다시 검색하지 않는다.
+10. 이미 분석한 Class + Method + Mapper + XML은 다시 탐색하지 않는다.
 
 ---
 
-## Source 범위
+# Source Boundary
 
-Java:
+## 6. Java
+
+Java Source:
 
 gipms-api-*/src/main/java/**
 
-Resources:
+Controller가 발견된 프로젝트를:
 
-gipms-api-*/src/main/resources/**
+CURRENT_PROJECT
 
-Controller가 발견된 프로젝트를 기준으로
-관련 Source를 우선 추적한다.
+로 사용한다.
 
 ---
 
-## 제외
+## 7. Resources
+
+MyBatis 탐색 범위:
+
+CURRENT_PROJECT/src/main/resources/**
+
+다른 Backend 프로젝트의 Resources까지
+검색 범위를 확장하지 않는다.
+
+---
+
+## 8. Hard Exclude
 
 다음은 탐색하지 않는다.
 
@@ -125,112 +176,444 @@ Controller가 발견된 프로젝트를 기준으로
 - **/*.class
 - **/node_modules/**
 - **/.git/**
-
-Dependency/JAR 내부로 이동하지 않는다.
-
-Oracle Metadata를 조회하지 않는다.
-
-Code Index를 사용하지 않는다.
-
-Agent를 사용하지 않는다.
-
-병렬 Worker를 사용하지 않는다.
+- **/.gradle/**
+- **/.m2/**
+- **/libs/**
+- **/lib/**
+- **/BOOT-INF/**
+- **/WEB-INF/lib/**
 
 ---
 
-## MyBatis
+# FAST Search
 
-Service에서 실제 Mapper 호출이 확인되면:
+## 9. 기본 탐색 방식
 
-Mapper Type
+항상:
+
+정확한 문자열
+
+→ Grep
+
+→ 위치 확보
+
+→ 필요한 부분만 Read
+
+→ 다음 Symbol
+
+순서로 진행한다.
+
+전체 파일을 기본적으로 읽지 않는다.
+
+---
+
+## 10. 금지
+
+다음 방식으로 탐색하지 않는다.
+
+Repository 전체 구조 파악
+
+전체 Java 파일 목록 수집
+
+전체 XML 파일 목록 수집
+
+전체 Service 목록 수집
+
+전체 Mapper 목록 수집
+
+관련 있어 보이는 Source 사전 탐색
+
+---
+
+# Controller
+
+## 11. Controller 탐색
+
+Backend URL에서
+식별력이 높은 Mapping 문자열로
+Controller 후보를 찾는다.
+
+class-level mapping
+
 +
-Mapper Method
 
-를 기준으로 MyBatis XML을 찾는다.
+method-level mapping
 
-실제 Statement만 읽는다.
++
 
-다음을 확인한다.
+HTTP Method
 
-- SELECT / INSERT / UPDATE / DELETE
-- Main Table
-- JOIN
-- WHERE
-- Parameter
-- Dynamic SQL
-- include
+를 확인한다.
 
-관련 없는 Statement는 분석하지 않는다.
+HTTP Method가 UNKNOWN이면
+Annotation에서 확인한다.
 
 ---
 
-## Local/private Method
+## 12. Controller에서 확보
 
-현재 실행 경로에서
-실제로 호출되는 Local/private Method만 따라간다.
+다음만 확보한다.
+
+Controller Class
+
+Controller Method
+
+Service Type
+
+Service Method
+
+CURRENT_PROJECT
+
+---
+
+# Service
+
+## 13. Service
+
+Controller에서 실제 호출된
+Service만 추적한다.
+
+전체 Service 목록을 찾지 않는다.
+
+실제 호출된 Method만 확인한다.
+
+---
+
+## 14. ServiceImpl
+
+정확한 Service Type의
+구현체만 찾는다.
+
+실제 호출된 Method 부분만 읽는다.
+
+전체 ServiceImpl 파일을
+기본적으로 읽지 않는다.
+
+---
+
+# Execution Trace
+
+## 15. 실제 호출 기준
+
+ServiceImpl Method에서
+실제로 호출되는 대상만 추적한다.
 
 관련 있어 보인다는 이유로
-다른 Local Method를 탐색하지 않는다.
+다른 Source를 찾지 않는다.
 
 ---
 
-## 다른 Service
+## 16. Local/private Method
 
-현재 Method에서
-실제로 호출되는 다른 Business Service만 따라간다.
+현재 실행 경로에서
+실제로 호출된 Local/private Method만 따라간다.
 
-Service 목록을 미리 수집하지 않는다.
+동일 Class 안에서 확인 가능한 경우에만
+Local Method로 처리한다.
 
-실제 호출된 Method만 분석한다.
+관련 Local Method 목록을
+미리 만들지 않는다.
 
-Service 간 호출이 계속되면
-실제 호출 관계를 계속 따라간다.
+---
+
+## 17. 다른 Business Service
+
+현재 Method에서 실제 호출되는
+다른 Business Service만 추적한다.
 
 예:
 
 Service A
+
 → Service B
+
 → Service C
-→ Mapper
+
+실제 호출 관계가 있으면 따라간다.
+
+전체 Service 목록을
+미리 검색하지 않는다.
+
+---
+
+## 18. 중복 방지
+
+이미 분석한:
+
+Class + Method
+
+조합은 다시 읽지 않는다.
+
+순환 호출이 발생하면
+호출 관계만 기록하고
+재분석하지 않는다.
+
+---
+
+# Mapper
+
+## 19. Mapper 호출
+
+실제 실행 경로에서 발견된
+Mapper 호출만 처리한다.
+
+예:
+
+materialMapper.selectMaterial(...)
+
+확보:
+
+Mapper Variable
+
+Mapper Type
+
+Mapper Method
+
+---
+
+## 20. Mapper Type
+
+현재 읽은 Source에서
+Mapper Type이 확인되면 그대로 사용한다.
+
+보이지 않을 때만
+현재 ServiceImpl 파일 안에서
+Mapper Variable을 찾는다.
+
+Repository 전체에서
+Mapper Variable을 검색하지 않는다.
+
+---
+
+## 21. Mapper.java
+
+Mapper.java는
+기본적으로 읽지 않는다.
+
+가능하면:
+
+ServiceImpl
+
+→ Mapper Type
+
+→ Mapper Method
+
+→ MyBatis XML
+
+로 바로 이동한다.
+
+---
+
+# MyBatis Minimal
+
+## 22. 가장 중요한 규칙
+
+MyBatis에서 SQL을 분석하지 않는다.
+
+이번 테스트에서는:
+
+Mapper Type
+
+→ XML
+
+→ Statement ID
+
+까지만 확인한다.
+
+---
+
+## 23. XML 탐색 범위
+
+XML 검색은 반드시:
+
+CURRENT_PROJECT/src/main/resources/**
+
+범위로 제한한다.
+
+다른 프로젝트까지 검색하지 않는다.
+
+---
+
+## 24. Namespace 우선
+
+Mapper Type을 알고 있으면
+정확한 namespace 문자열로 XML을 찾는다.
+
+예:
+
+MaterialMapper
+
+를 알고 있다면:
+
+namespace="...MaterialMapper"
+
+를 찾는다.
+
+정확한 XML이 발견되면
+XML 검색을 즉시 중단한다.
+
+---
+
+## 25. XML Cache
+
+Mapper Type과 XML 관계를
+한 번 확인하면 재사용한다.
+
+예:
+
+MaterialMapper
+
+→ material/MaterialMapper.xml
+
+을 한 번 찾았다면
+
+MaterialMapper의 다른 Method 때문에
+namespace를 다시 검색하지 않는다.
+
+---
+
+## 26. Statement ID
+
+XML 파일이 확정되면
+해당 XML 안에서만
+정확한 Statement ID를 찾는다.
+
+예:
+
+Mapper Method:
+
+selectMaterial
+
+이면:
+
+id="selectMaterial"
+
+만 찾는다.
+
+---
+
+## 27. Statement Body 금지
+
+다음이 확인되면:
+
+<select id="selectMaterial">
 
 또는:
 
-Service A
-→ Service B
-→ Service A의 다른 Method
+<insert id="insertMaterial">
 
-실제 Source에 존재하면 그대로 추적한다.
+또는:
 
----
+<update id="updateMaterial">
 
-## SAP / RFC / 외부 연동
+또는:
 
-실제 실행 경로에서 발견된 경우에만 확인한다.
+<delete id="deleteMaterial">
 
-호출이 없으면 찾지 않는다.
+Statement가 존재한다고 판단한다.
 
-Dependency/JAR 내부 구현은 분석하지 않는다.
-
-프로젝트 Source에서 확인 가능한 범위까지만 추적한다.
+그 아래 SQL Body를 읽지 않는다.
 
 ---
 
-## Evidence
+## 28. XML 전체 Read 금지
 
-분석하면서 확인한 Source 위치를 재사용한다.
+MyBatis XML 전체를 읽지 않는다.
 
-Evidence를 만들기 위해
-Source를 다시 검색하지 않는다.
+Statement 주변 40줄 Read도 하지 않는다.
+
+Grep 결과로 Statement ID가 확인되면
+그것으로 종료한다.
+
+---
+
+## 29. include 금지
+
+다음을 분석하지 않는다.
+
+<include>
+
+<sql>
+
+<resultMap>
+
+<if>
+
+<choose>
+
+<foreach>
+
+이번 테스트에서는
+존재 여부조차 확인할 필요 없다.
+
+---
+
+## 30. XML Fallback
+
+Mapper Type namespace로
+XML을 찾지 못한 경우에만
+Mapper Method ID를 사용할 수 있다.
+
+검색:
+
+CURRENT_PROJECT/src/main/resources/**
+
+에서:
+
+id="{MAPPER_METHOD}"
+
+를 찾는다.
+
+후보가 여러 개 나오면
+Mapper namespace와 일치하는 XML만 선택한다.
+
+후보 XML 전체를 읽지 않는다.
+
+---
+
+# External
+
+## 31. SAP / RFC / External
+
+실제 실행 경로에서 발견되면
+호출 이름만 기록한다.
+
+이번 테스트에서는
+외부 연동 내부로 들어가지 않는다.
+
+예:
+
+sapService.send(...)
+
+이면:
+
+External Call:
+sapService.send
+
+만 기록한다.
+
+---
+
+# Evidence
+
+## 32. Evidence
+
+분석 중 이미 확인한 위치만 사용한다.
+
+Evidence를 위해
+추가 Grep 또는 Read를 하지 않는다.
 
 형식:
 
 프로젝트 루트 기준 상대경로:라인범위
 
-절대경로를 출력하지 않는다.
+절대경로는 출력하지 않는다.
 
 ---
 
-## 출력
+# Output
+
+## 33. 결과
 
 파일을 생성하지 않는다.
 
@@ -238,7 +621,7 @@ Source를 다시 검색하지 않는다.
 
 형식:
 
-=== BE SIMPLE TEST ===
+=== BE SIMPLE TEST v0.2 ===
 
 INPUT
 
@@ -249,80 +632,86 @@ URL:
 {BACKEND_URL}
 
 
+CONTROLLER
+
+Class:
+{CONTROLLER_CLASS}
+
+Method:
+{CONTROLLER_METHOD}
+
+Evidence:
+{PATH:LINES}
+
+
+SERVICE
+
+Type:
+{SERVICE_TYPE}
+
+Method:
+{SERVICE_METHOD}
+
+
 EXECUTION FLOW
 
-Controller
-{CLASS}#{METHOD}
+{CONTROLLER_CLASS}#{CONTROLLER_METHOD}
 
-↓
+→ {SERVICE}
 
-Service
-{CLASS}#{METHOD}
+→ {실제 Local/private 또는 Business Service 호출}
 
-↓
+→ {MAPPER_TYPE}#{MAPPER_METHOD}
 
-{실제 호출 순서}
-
-↓
-
-Mapper
-{MAPPER}#{METHOD}
-
-↓
-
-SQL
-{SQL_TYPE} {TABLE}
-
-↓
-
-Return
-{RETURN}
+→ {XML_PATH}#{STATEMENT_ID}
 
 
-DETAIL
+LOCAL METHODS
 
-1. {실행 단계}
-   - 처리:
-   - 호출:
-   - 조건:
-   - Evidence:
+실제 추적된 경우만 출력한다.
 
-2. {실행 단계}
-   - 처리:
-   - 호출:
-   - 조건:
-   - Evidence:
-
-...
+- {CLASS}#{METHOD}
+- Evidence: {PATH:LINES}
 
 
-MAPPER / SQL
+BUSINESS SERVICES
 
-- Mapper:
-- Statement:
-- SQL Type:
-- Main Table:
-- JOIN:
-- WHERE:
-- Parameter:
-- Dynamic SQL:
-- Include:
-- Evidence:
+실제 추적된 경우만 출력한다.
+
+- {SERVICE}#{METHOD}
+- Evidence: {PATH:LINES}
 
 
-EXTERNAL
+MAPPERS
 
-실제 호출이 있는 경우만 출력한다.
+1.
 
-- Type:
-- Call:
-- 처리:
-- Evidence:
+Mapper:
+{MAPPER_TYPE}
+
+Method:
+{MAPPER_METHOD}
+
+XML:
+{XML_PATH}
+
+Statement:
+{STATEMENT_ID}
+
+Evidence:
+{PATH:LINE}
 
 
-EXCEPTION
+EXTERNAL CALLS
 
-실제 확인된 예외 흐름만 출력한다.
+실제 발견된 경우만 출력한다.
+
+- {CALL}
+
+
+MYBATIS SQL ANALYSIS
+
+SKIPPED
 
 
 STATUS
@@ -331,14 +720,49 @@ COMPLETED
 
 ---
 
-## STOP
+# 실패
 
-실제 실행 흐름 추적이 끝나면 즉시 종료한다.
+## 34. 탐색 실패
 
-추가 후보 Source를 찾지 않는다.
+특정 Source를 찾지 못해도
+검색 범위를 무작정 확장하지 않는다.
 
-문서를 생성하지 않는다.
+필요한 경우 다음을 출력한다.
+
+CONTROLLER_NOT_FOUND
+
+SERVICE_NOT_FOUND
+
+SERVICE_IMPL_NOT_FOUND
+
+MAPPER_TYPE_NOT_FOUND
+
+MAPPER_XML_NOT_FOUND
+
+STATEMENT_NOT_FOUND
+
+---
+
+# STOP
+
+## 35. 종료
+
+모든 실제 Mapper에 대해:
+
+XML
+
++
+
+Statement ID
+
+가 확인되면 종료한다.
+
+SQL Body를 읽지 않는다.
+
+추가 Source를 탐색하지 않는다.
 
 BE-REFERENCE를 읽지 않는다.
+
+문서를 생성하지 않는다.
 
 다른 Skill을 실행하지 않는다.
