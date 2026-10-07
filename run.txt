@@ -1,0 +1,5 @@
+/be-analysis-parallel generator-add FE-ACT-010-create
+
+POST /generator/create
+GET /generator/status
+POST /generator/validate
