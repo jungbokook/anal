@@ -1,15 +1,16 @@
 ---
 name: be-trace-test
-description: Backend URL 하나를 대상으로 Controller부터 ServiceImpl, 직접 Mapper 호출, MyBatis XML, SQL까지 최소 탐색하고 단계별 진행 체크포인트를 출력하여 병목 구간을 확인한다.
+description: Backend URL 하나를 대상으로 Controller부터 ServiceImpl, Local/private Method, Mapper 호출, MyBatis XML, SQL까지 최소 탐색으로 추적하여 Backend 실행 흐름과 탐색 성능을 확인한다.
 argument-hint: "<HTTP Method|UNKNOWN> <Backend URL>"
 allowed-tools: Grep, Read
 ---
 
-# BE Trace Test v0.2 - Checkpoint
+# BE Trace Test v0.3 - Local Method Trace
 
 ## 1. 목적
 
-Backend 분석 최소 경로의 병목 구간을 확인한다.
+v0.2의 빠른 Backend 탐색 구조를 유지하면서
+ServiceImpl 내부의 Local/private Method 호출 추적만 추가한다.
 
 분석 범위:
 
@@ -17,13 +18,22 @@ Backend URL
 → Controller
 → Service
 → ServiceImpl
+→ Local/private Method
+→ Local/private Method
 → 직접 Mapper 호출
 → MyBatis XML
 → SQL
 
-새로운 분석 기능은 추가하지 않는다.
+이번 버전의 핵심은:
 
-v0.1과 동일한 분석 범위를 유지한다.
+ServiceImpl의 시작 Method에서 호출되는
+같은 Class 내부 Method를 끝까지 추적하는 것이다.
+
+단:
+
+다른 Service 내부로는 들어가지 않는다.
+
+SAP/RFC/외부 시스템 내부로도 들어가지 않는다.
 
 ---
 
@@ -45,15 +55,15 @@ UNKNOWN /material/create
 
 ## 3. 실행 시작
 
-분석 시작 즉시 다음을 출력한다.
+분석 시작 즉시 출력한다.
 
 [BE-TRACE] START
 
 Method: {HTTP_METHOD}
 URL: {BACKEND_URL}
 
-각 단계가 완료되는 즉시
-다음 단계로 넘어가기 전에 Checkpoint를 출력한다.
+각 주요 단계가 완료되면
+즉시 Checkpoint를 출력한다.
 
 Checkpoint를 마지막에 몰아서 출력하지 않는다.
 
@@ -71,20 +81,23 @@ Checkpoint를 마지막에 몰아서 출력하지 않는다.
 - Code Index
 - Oracle MCP
 - Database Metadata
-- Local/private Method 내부 추적
 - 다른 Service 내부 추적
-- SAP
-- RFC
+- SAP 내부 추적
+- RFC 내부 추적
 - 외부 API 내부 추적
 - Exception 상세 분석
 - Response 상세 분석
 - Validation 상세 분석
-- Branch 상세 분석
+- 전체 Branch 상세 분석
 - resultMap 상세 분석
 - include 내부 추적
 - Mapper.java 기본 탐색
 
-이번 테스트는 새로운 기능을 추가하는 테스트가 아니다.
+이번 버전에서 새로 추가되는 것은:
+
+Local/private Method 추적
+
+하나뿐이다.
 
 ---
 
@@ -169,6 +182,9 @@ SERVICE_METHOD
 SERVICE_IMPL_FILE
 SERVICE_IMPL_CLASS
 
+LOCAL_METHODS
+VISITED_LOCAL_METHODS
+
 MAPPER_TYPES
 MAPPER_METHODS
 MAPPER_XML
@@ -235,7 +251,7 @@ CURRENT_PROJECT로 지정한다.
 
 Controller가 확정되는 즉시 출력한다.
 
-[BE-TRACE] CHECKPOINT 1/5 - CONTROLLER FOUND
+[BE-TRACE] CHECKPOINT 1/6 - CONTROLLER FOUND
 
 Project:
 {CURRENT_PROJECT}
@@ -246,7 +262,8 @@ Controller:
 Service Call:
 {SERVICE_TYPE}#{SERVICE_METHOD}
 
-Checkpoint 출력 후 즉시 Service 탐색으로 이동한다.
+Checkpoint 출력 후
+즉시 Service 탐색으로 이동한다.
 
 ---
 
@@ -316,7 +333,7 @@ Method 종료가 보이지 않을 때만
 
 ServiceImpl Method가 확보되는 즉시 출력한다.
 
-[BE-TRACE] CHECKPOINT 2/5 - SERVICE IMPL FOUND
+[BE-TRACE] CHECKPOINT 2/6 - SERVICE IMPL FOUND
 
 Service:
 {SERVICE_TYPE}#{SERVICE_METHOD}
@@ -325,54 +342,281 @@ ServiceImpl:
 {SERVICE_IMPL_CLASS}#{SERVICE_METHOD}
 
 Checkpoint 출력 후
-즉시 직접 Mapper 호출 확인으로 이동한다.
+Local/private Method 탐색으로 이동한다.
 
 ---
 
-# PHASE 3. Direct Mapper Calls
+# PHASE 3. Local/private Method Trace
 
-## 18. Mapper 분석 범위
+## 18. Local Method 정의
 
-ServiceImpl의 현재 Method Body에서
-직접 호출되는 Mapper만 찾는다.
+현재 ServiceImpl Class 내부에 선언되어 있고
+현재 분석 Method 또는 다른 Local Method에서
+직접 호출되는 Method를 Local Method로 본다.
 
 예:
 
-materialMapper.selectMaterial(...)
+public void createMaterial(...) {
 
-materialMapper.insertMaterial(...)
+    validateMaterial(...);
 
-historyMapper.insertHistory(...)
+    String code = makeMaterialCode(...);
+
+    saveMaterial(...);
+}
+
+위의:
+
+validateMaterial
+makeMaterialCode
+saveMaterial
+
+가 같은 ServiceImpl Class에 선언되어 있다면
+Local Method 후보이다.
 
 ---
 
-## 19. 이번 단계에서 추적하지 않는 호출
+## 19. Local Method 후보 추출
 
-다음 호출은 내부로 들어가지 않는다.
+현재 분석 중인 Method Body에서
+Method Call을 확인한다.
 
-Local/private Method:
+단순히 호출된 모든 Method를
+Local Method라고 판단하지 않는다.
 
-validateMaterial(...)
+같은 ServiceImpl 파일 안에
+실제 Method 선언이 존재하는 경우에만
+Local Method로 확정한다.
 
-calculateValue(...)
+---
 
-다른 Service:
+## 20. Local Method 확인 범위
 
-otherService.check(...)
+Local Method 확인은:
 
-외부 연동:
+SERVICE_IMPL_FILE
+
+하나에서만 수행한다.
+
+다른 Java 파일을 검색하지 않는다.
+
+Repository 전체에서
+Method 이름을 검색하지 않는다.
+
+---
+
+## 21. Local Method 탐색
+
+Local Method 후보가 있으면
+SERVICE_IMPL_FILE 안에서
+정확한 Method 선언을 찾는다.
+
+Method 위치가 확인되면
+해당 Method 주변만 Read한다.
+
+초기 범위:
+
+약 60줄
+
+Method 종료가 보이지 않을 때만
+추가 Read한다.
+
+전체 ServiceImpl 파일 Read는 하지 않는다.
+
+---
+
+## 22. Recursive Local Trace
+
+Local Method 안에서
+다른 Local Method 호출이 발견되면
+동일한 규칙으로 계속 추적한다.
+
+예:
+
+mainMethod()
+
+→ validate()
+
+→ validatePlant()
+
+→ checkPlantCode()
+
+같은 ServiceImpl Class 내부라면
+끝까지 따라간다.
+
+---
+
+## 23. Local Method 깊이
+
+고정 Depth 제한을 두지 않는다.
+
+같은 ServiceImpl Class 내부에서
+실제 호출 관계가 이어지는 동안 추적한다.
+
+단:
+
+이미 분석한 Method는 다시 분석하지 않는다.
+
+VISITED_LOCAL_METHODS에 등록한다.
+
+---
+
+## 24. 순환 호출 방지
+
+예:
+
+methodA()
+→ methodB()
+→ methodA()
+
+와 같은 구조가 있더라도
+이미 VISITED_LOCAL_METHODS에 존재하는 Method는
+다시 Read하지 않는다.
+
+출력에는 호출 관계만 기록할 수 있다.
+
+무한 반복 탐색을 하지 않는다.
+
+---
+
+## 25. Local Method에서 확인할 것
+
+각 Local Method에서는 다음만 확인한다.
+
+- Method 이름
+- 호출 관계
+- 직접 Mapper 호출
+- 추가 Local Method 호출
+- 다른 Service 호출 이름
+- 외부 연동 호출 이름
+
+이번 단계에서는
+비즈니스 로직을 상세 해석하지 않는다.
+
+---
+
+## 26. Local Method 안의 Mapper
+
+Local Method 안에서
+Mapper 호출이 발견되면
+DIRECT MAPPER CALLS에 포함한다.
+
+예:
+
+mainMethod()
+
+→ validate()
+
+→ saveHistory()
+
+→ historyMapper.insertHistory()
+
+이면:
+
+historyMapper.insertHistory()
+
+도 Mapper 분석 대상이다.
+
+---
+
+## 27. Local Method 안의 다른 Service
+
+예:
+
+materialCheckService.check(...)
+
+가 발견되더라도
+이번 버전에서는 내부로 들어가지 않는다.
+
+다음에만 기록한다.
+
+Other Service:
+materialCheckService.check
+
+---
+
+## 28. Local Method 안의 외부 연동
+
+예:
 
 sapService.send(...)
 
+rfcClient.execute(...)
+
 externalClient.call(...)
 
-이러한 호출은 존재 여부와 이름만 기록할 수 있다.
+등이 발견되어도
+이번 버전에서는 내부 추적하지 않는다.
 
-내부 Source는 탐색하지 않는다.
+다음에만 기록한다.
+
+External:
+sapService.send
 
 ---
 
-## 20. Mapper 호출에서 확보
+## 29. Local Trace 종료 조건
+
+현재 Method에서 시작하여
+연결된 모든 Local Method를 확인했고
+
+새로운 Local Method가 더 이상 발견되지 않으면
+Local Trace를 종료한다.
+
+---
+
+## 30. CHECKPOINT 3
+
+Local/private Method 추적이 완료되면
+즉시 출력한다.
+
+[BE-TRACE] CHECKPOINT 3/6 - LOCAL METHODS TRACED
+
+Local Method Count:
+{COUNT}
+
+Local Methods:
+
+1. {METHOD}
+2. {METHOD}
+3. ...
+
+호출 흐름:
+
+{SERVICE_METHOD}
+→ {LOCAL_METHOD}
+→ {LOCAL_METHOD}
+
+Local Method가 없으면:
+
+Local Method Count:
+0
+
+Local Methods:
+NONE
+
+으로 출력한다.
+
+---
+
+# PHASE 4. Direct Mapper Calls
+
+## 31. Mapper 분석 대상
+
+다음 위치에서 발견된
+모든 직접 Mapper 호출을 합친다.
+
+1. ServiceImpl 시작 Method
+
+2. 추적된 Local/private Method
+
+중복 Mapper 호출은
+같은 Mapper Type + Method 기준으로
+한 번만 분석한다.
+
+---
+
+## 32. Mapper 호출에서 확보
 
 각 Mapper 호출에서 다음을 확보한다.
 
@@ -393,45 +637,43 @@ selectMaterial
 
 ---
 
-## 21. Mapper Type 확인
+## 33. Mapper Type 확인
 
-현재 읽은 ServiceImpl Method 범위에서
+현재 읽은 Method 범위에서
 Mapper Type이 확인되면 그대로 사용한다.
 
 확인되지 않을 때만
-현재 ServiceImpl 파일에서
+SERVICE_IMPL_FILE에서
 Mapper Variable 이름을 정확히 Grep한다.
 
-예:
-
-materialMapper
-
 Mapper Type을 확보하면
-즉시 Grep을 종료한다.
+즉시 탐색을 종료한다.
 
 ---
 
-## 22. Mapper.java
+## 34. Mapper.java
 
 Mapper Java Interface는
-이번 테스트에서 기본적으로 읽지 않는다.
+기본적으로 읽지 않는다.
 
 기본 흐름:
 
-ServiceImpl
+ServiceImpl / Local Method
 → Mapper Type
 → Mapper Method
 → MyBatis XML
 
-Mapper.java를 통한 중간 검증을 하지 않는다.
+Mapper.java를 통한
+중간 검증은 하지 않는다.
 
 ---
 
-## 23. CHECKPOINT 3
+## 35. CHECKPOINT 4
 
-직접 Mapper 호출 목록이 확보되는 즉시 출력한다.
+Mapper 호출 목록이 확보되면
+즉시 출력한다.
 
-[BE-TRACE] CHECKPOINT 3/5 - DIRECT MAPPER CALLS FOUND
+[BE-TRACE] CHECKPOINT 4/6 - DIRECT MAPPER CALLS FOUND
 
 Mapper Call Count:
 {COUNT}
@@ -449,14 +691,11 @@ Mapper Call Count:
 
 으로 출력한다.
 
-Checkpoint 출력 후
-즉시 XML 탐색으로 이동한다.
-
 ---
 
-# PHASE 4. MyBatis XML
+# PHASE 5. MyBatis XML
 
-## 24. XML 탐색
+## 36. XML 탐색
 
 각 Mapper Type에 대해
 CURRENT_PROJECT의:
@@ -475,7 +714,31 @@ src/main/resources/**
 
 ---
 
-## 25. XML Fallback
+## 37. Mapper XML Cache
+
+동일 Mapper Type에 대해
+XML을 이미 찾았다면
+다시 namespace 검색을 하지 않는다.
+
+예:
+
+MaterialMapper#selectMaterial
+
+MaterialMapper#insertMaterial
+
+MaterialMapper#updateMaterial
+
+세 Method가 있더라도
+
+MaterialMapper XML은
+한 번만 찾는다.
+
+그 XML 안에서
+각 Statement ID만 찾는다.
+
+---
+
+## 38. XML Fallback
 
 Mapper Type namespace로 찾지 못한 경우에만
 정확한 Mapper Method ID를 사용할 수 있다.
@@ -484,17 +747,18 @@ Mapper Type namespace로 찾지 못한 경우에만
 
 id="selectMaterial"
 
-검색 범위는 여전히:
+검색 범위는:
 
 CURRENT_PROJECT/src/main/resources/**
 
 로 제한한다.
 
-다른 Backend 프로젝트까지 확장하지 않는다.
+다른 Backend 프로젝트까지
+검색 범위를 확장하지 않는다.
 
 ---
 
-## 26. Statement 탐색
+## 39. Statement 탐색
 
 확정된 Mapper XML 안에서
 실제 Mapper Method와 연결되는 Statement만 찾는다.
@@ -515,7 +779,7 @@ CURRENT_PROJECT/src/main/resources/**
 
 ---
 
-## 27. XML 부분 Read
+## 40. XML 부분 Read
 
 Statement 시작 위치에서
 약 40줄만 먼저 Read한다.
@@ -538,12 +802,12 @@ Statement 시작 위치에서
 
 ---
 
-## 28. CHECKPOINT 4
+## 41. CHECKPOINT 5
 
-필요한 XML Statement 위치가 모두 확보되면
+필요한 XML Statement가 모두 확보되면
 즉시 출력한다.
 
-[BE-TRACE] CHECKPOINT 4/5 - MYBATIS XML FOUND
+[BE-TRACE] CHECKPOINT 5/6 - MYBATIS XML FOUND
 
 XML Count:
 {COUNT}
@@ -563,14 +827,11 @@ Statement:
 2.
 ...
 
-Checkpoint 출력 후
-즉시 SQL 확인으로 이동한다.
-
 ---
 
-# PHASE 5. SQL
+# PHASE 6. SQL
 
-## 29. SQL 분석 범위
+## 42. SQL 분석 범위
 
 각 Statement에서 다음만 확인한다.
 
@@ -586,7 +847,7 @@ SQL을 장문으로 설명하지 않는다.
 
 ---
 
-## 30. SQL Type
+## 43. SQL Type
 
 다음 중 하나로 기록한다.
 
@@ -600,20 +861,21 @@ DELETE
 
 ---
 
-## 31. Table
+## 44. Table
 
-SQL Source에서 직접 확인되는 Table만 기록한다.
-
-추측하지 않는다.
+SQL Source에서
+직접 확인되는 Table만 기록한다.
 
 확인:
 
 - Main Table
 - JOIN Table
 
+Table을 추측하지 않는다.
+
 ---
 
-## 32. Parameter
+## 45. Parameter
 
 SQL에서 직접 사용되는
 MyBatis Parameter를 확인한다.
@@ -626,12 +888,13 @@ MyBatis Parameter를 확인한다.
 
 ${value}
 
-상세 Request → SQL Mapping은
+Request부터 SQL까지의
+상세 Parameter Mapping은
 이번 버전에서 분석하지 않는다.
 
 ---
 
-## 33. Dynamic SQL
+## 46. Dynamic SQL
 
 다음 Tag가 존재하면 기록한다.
 
@@ -661,7 +924,7 @@ NO
 
 ---
 
-## 34. include
+## 47. include
 
 Statement에:
 
@@ -674,19 +937,22 @@ Include:
 
 만 기록한다.
 
-include 내부 Source는 추적하지 않는다.
+include 내부 Source는
+이번 버전에서 추적하지 않는다.
 
 ---
 
-## 35. CHECKPOINT 5
+## 48. CHECKPOINT 6
 
-SQL 기본 정보가 확보되는 즉시 출력한다.
+SQL 기본 정보가 확보되면
+즉시 출력한다.
 
-[BE-TRACE] CHECKPOINT 5/5 - SQL FOUND
+[BE-TRACE] CHECKPOINT 6/6 - SQL FOUND
 
 SQL Statements:
 
 1.
+
 Mapper:
 {MAPPER_TYPE}#{MAPPER_METHOD}
 
@@ -707,19 +973,18 @@ Include:
 
 ---
 
-# PHASE 6. Final Result
+# PHASE 7. Final Result
 
-## 36. 종료 조건
+## 49. 종료 조건
 
-CHECKPOINT 5까지 완료하면
+CHECKPOINT 6까지 완료하면
 추가 Source 탐색을 하지 않는다.
 
-다음 기능을 분석하지 않는다.
+다음은 분석하지 않는다.
 
-- Local Method 내부
 - 다른 Service 내부
-- SAP/RFC
-- External API
+- SAP/RFC 내부
+- External API 내부
 - Response 상세
 - Exception 상세
 - Validation 상세
@@ -729,13 +994,13 @@ CHECKPOINT 5까지 완료하면
 
 ---
 
-## 37. 최종 결과
+## 50. 최종 결과
 
 파일을 생성하지 않는다.
 
-다음 형식으로 화면에 출력한다.
+화면에 다음 형식으로 출력한다.
 
-=== BE TRACE TEST v0.2 ===
+=== BE TRACE TEST v0.3 ===
 
 HTTP METHOD:
 {HTTP_METHOD}
@@ -776,9 +1041,39 @@ Method:
 Evidence:
 {PATH:LINES}
 
+LOCAL METHOD TRACE
+
+Local Method Count:
+{COUNT}
+
+Flow:
+
+{SERVICE_METHOD}
+→ {LOCAL_METHOD}
+→ {LOCAL_METHOD}
+
+Local Methods:
+
+1.
+Method:
+{METHOD}
+
+Evidence:
+{PATH:LINES}
+
+2.
+Method:
+{METHOD}
+
+Evidence:
+{PATH:LINES}
+
 DIRECT MAPPER CALLS
 
 1.
+
+Called From:
+{SERVICE_METHOD|LOCAL_METHOD}
 
 Mapper Type:
 {MAPPER_TYPE}
@@ -809,9 +1104,6 @@ Evidence:
 
 NON-TRACED CALLS
 
-Local Methods:
-{NAMES|NONE}
-
 Other Services:
 {NAMES|NONE}
 
@@ -823,6 +1115,16 @@ TRACE
 {CONTROLLER_CLASS}#{CONTROLLER_METHOD}
 → {SERVICE_TYPE}#{SERVICE_METHOD}
 → {SERVICE_IMPL_CLASS}#{SERVICE_METHOD}
+
+Local:
+
+{SERVICE_METHOD}
+→ {LOCAL_METHOD}
+→ {LOCAL_METHOD}
+
+Mapper:
+
+{CALLING_METHOD}
 → {MAPPER_TYPE}#{MAPPER_METHOD}
 → {STATEMENT_ID}
 → {SQL_TYPE} {MAIN_TABLE}
@@ -832,12 +1134,12 @@ COMPLETED
 
 ---
 
-## 38. Evidence
+## 51. Evidence
 
-Evidence는 Source를 탐색하면서
+Evidence는 Source 탐색 과정에서
 이미 확인한 위치를 사용한다.
 
-Evidence 때문에
+Evidence를 만들기 위해
 추가 Grep이나 Read를 하지 않는다.
 
 형식:
@@ -848,7 +1150,7 @@ Project Root 기준 상대경로:라인범위
 
 ---
 
-## 39. 탐색 실패
+## 52. 탐색 실패
 
 특정 단계에서 Source를 찾지 못하면
 검색 범위를 무작정 확장하지 않는다.
@@ -860,6 +1162,8 @@ CONTROLLER_NOT_FOUND
 SERVICE_NOT_FOUND
 
 SERVICE_IMPL_NOT_FOUND
+
+LOCAL_METHOD_NOT_FOUND
 
 MAPPER_TYPE_NOT_FOUND
 
@@ -873,17 +1177,25 @@ JAR이나 Dependency로 이동하지 않는다.
 
 ---
 
-## 40. Checkpoint 원칙
+## 53. Local Method 탐색 실패 규칙
 
-Checkpoint의 목적은
-어느 구간에서 실행이 오래 걸리는지
-사용자가 관찰할 수 있게 하는 것이다.
+호출 이름은 보이지만
+SERVICE_IMPL_FILE 안에서
+실제 Method 선언을 찾지 못한 경우
 
-따라서 각 Checkpoint는
-해당 단계가 완료되는 즉시 출력한다.
+Local Method라고 확정하지 않는다.
 
-다음 단계까지 기다렸다가
-이전 Checkpoint를 함께 출력하지 않는다.
+다른 파일에서 같은 이름을 검색하지 않는다.
+
+NON-TRACED CALLS에
+필요한 경우 이름만 기록한다.
+
+---
+
+## 54. Checkpoint 원칙
+
+Checkpoint는
+각 단계가 완료되는 즉시 출력한다.
 
 순서:
 
@@ -891,27 +1203,32 @@ Checkpoint의 목적은
 
 ↓
 
-CHECKPOINT 1/5
+CHECKPOINT 1/6
 CONTROLLER FOUND
 
 ↓
 
-CHECKPOINT 2/5
+CHECKPOINT 2/6
 SERVICE IMPL FOUND
 
 ↓
 
-CHECKPOINT 3/5
+CHECKPOINT 3/6
+LOCAL METHODS TRACED
+
+↓
+
+CHECKPOINT 4/6
 DIRECT MAPPER CALLS FOUND
 
 ↓
 
-CHECKPOINT 4/5
+CHECKPOINT 5/6
 MYBATIS XML FOUND
 
 ↓
 
-CHECKPOINT 5/5
+CHECKPOINT 6/6
 SQL FOUND
 
 ↓
@@ -924,7 +1241,31 @@ FINAL RESULT
 
 ---
 
-## 41. 완료
+## 55. 핵심 성능 원칙
+
+Local Method 추적을 추가했다고 해서
+Repository 검색 범위를 넓히지 않는다.
+
+Local Method 탐색 범위는 항상:
+
+SERVICE_IMPL_FILE
+
+하나로 제한한다.
+
+Local Method마다
+전체 파일을 다시 읽지 않는다.
+
+이미 읽은 Source 범위는 재사용한다.
+
+이미 방문한 Local Method는
+다시 분석하지 않는다.
+
+Mapper Type과 Mapper XML도
+한 번 찾은 결과를 재사용한다.
+
+---
+
+## 56. 완료
 
 최종 결과 출력 후 즉시 종료한다.
 
