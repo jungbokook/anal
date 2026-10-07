@@ -13,7 +13,7 @@ Frontend 화면을 시작점으로 기능을 단계적으로 분석하고
 
 2. 분석 구조
 
-분석은 4개의 독립 단계로 수행한다.
+분석은 3개의 독립 단계로 수행한다.
 
 1단계. 화면 기능 분석
 
@@ -52,73 +52,36 @@ Frontend 화면을 시작점으로 기능을 단계적으로 분석하고
 * Frontend 비즈니스 로직
 * State 처리
 * Backend 호출
-* HTTP Method / URL
+* HTTP Method
+* Backend URL
 * Request Parameter / Body
+* Response 처리
 
 출력:
 
 * Frontend 기능 문서
-* 발견된 Backend API 정보
+* 발견된 Backend 호출 정보
+
+Frontend 분석에서 Backend 호출이 발견되면
+Backend 분석에 필요한 식별 정보만 기록한다.
+
+예:
+
+HTTP Method: POST
+Backend URL: /material/create
 
 Backend 내부 구현은 분석하지 않는다.
 
+Backend 분석을 자동으로 실행하지 않는다.
+
 ⸻
 
-3단계. API 규격 분석
+3단계. Backend 기능 분석
 
 입력:
 
-* 사용자가 선택한 Backend API
-
-분석:
-
-* API 기능
 * HTTP Method
-* URL
-* Header
-* Query Parameter
-* Path Parameter
-* Request Body
-* Request Type
-* 필수 여부
-* Validation
-* Response
-* Response Type
-* HTTP Status
-* 오류 Response
-
-API 규격은 가능한 경우 다음 정보를 교차 확인한다.
-
-* 실제 Runtime Request / Response
-* Frontend 호출 코드
-* Controller
-* Request DTO
-* Response DTO
-* Validation
-
-Controller 이후의 다음 영역은 분석하지 않는다.
-
-* Service
-* ServiceImpl
-* Mapper
-* MyBatis XML
-* SQL
-* Backend 내부 비즈니스 로직
-
-출력:
-
-* API 규격 문서
-* API ID (API-001, API-002 …)
-
-⸻
-
-4단계. Backend 기능 분석
-
-입력:
-
-* 사용자가 선택한 Backend API
-* 또는 Backend URL
-* 또는 API ID
+* Backend URL
 
 Backend 분석은 독립된 Backend 분석 Skill의 규칙을 따른다.
 
@@ -145,8 +108,8 @@ Backend 분석에서 필요한 주요 대상은 다음과 같다.
 * Response
 * Exception
 
-상세 탐색 순서와 성능 최적화 규칙은
-Backend 분석 Skill에서 정의한다.
+상세 탐색 순서와
+성능 최적화 규칙은 Backend 분석 Skill에서 정의한다.
 
 ⸻
 
@@ -157,15 +120,9 @@ Backend 분석 Skill에서 정의한다.
 화면 기능 분석
 → 문서 생성
 → 종료
-
 Frontend 기능 분석
 → 문서 생성
 → 종료
-
-API 규격 분석
-→ 문서 생성
-→ 종료
-
 Backend 기능 분석
 → 문서 생성
 → 종료
@@ -220,8 +177,8 @@ Frontend Runtime 확인이 필요한 경우 사용한다.
 * Request
 * Response
 
-주로 화면 기능 분석 및
-API 실제 호출 정보 확인에 사용한다.
+주로 화면 기능 분석과
+Frontend 실제 동작 확인에 사용한다.
 
 Code Index MCP
 
@@ -235,7 +192,7 @@ Code Index MCP
 * Caller / Callee
 * 호출 관계
 
-단, Code Index 사용을 모든 분석에 강제하지 않는다.
+Code Index 사용을 모든 분석에 강제하지 않는다.
 
 분석 Skill에서 더 빠른 Source 탐색 방법을 정의한 경우
 해당 방법을 사용한다.
@@ -261,7 +218,10 @@ Controller
 
 SQL에서 확인 가능한 다음 정보를 분석할 수 있다.
 
-* SELECT / INSERT / UPDATE / DELETE
+* SELECT
+* INSERT
+* UPDATE
+* DELETE
 * Table
 * JOIN
 * WHERE
@@ -271,9 +231,9 @@ SQL에서 확인 가능한 다음 정보를 분석할 수 있다.
 * resultMap
 
 Database Metadata 조회는
-Backend 분석의 기본 필수 단계가 아니다.
+Backend 분석의 기본 단계가 아니다.
 
-별도 분석 Skill 또는 사용자의 명시적 요청이 없는 경우
+사용자가 별도로 요청하지 않는 경우
 Database Metadata 조회를 수행하지 않는다.
 
 ⸻
@@ -327,7 +287,6 @@ docs/analysis/{화면명}/
 docs/analysis/{화면명}/
 ├─ SCREEN-{화면명}.md
 ├─ frontend/
-├─ api/
 └─ backend/
 
 화면 기능 분석
@@ -339,20 +298,20 @@ Frontend 기능 분석
 Frontend 분석 Skill에서 정의한
 Action 기반 파일명 규칙을 사용한다.
 
-API 규격 분석
+예:
 
-API 분석 Skill에서 정의한
-API 기반 파일명 규칙을 사용한다.
+frontend/FE-ACT-001-{기능명}.md
 
 Backend 기능 분석
 
 Backend 분석 Skill에서 정의한
 BE 기반 파일명 규칙을 사용한다.
 
-파일명 상세 규칙은 각 단계의 Skill에서 관리한다.
+파일명 상세 생성 규칙은
+Backend Skill에서 관리한다.
 
-CLAUDE.md에서 특정 분석 Skill의
-세부 파일명 생성 로직을 중복 정의하지 않는다.
+CLAUDE.md에서는 Backend 파일명 생성 로직을
+중복 정의하지 않는다.
 
 필요한 디렉터리가 존재하지 않는 경우 생성한다.
 
@@ -364,36 +323,44 @@ CLAUDE.md에서 특정 분석 Skill의
 
 ⸻
 
-10. 단계 간 연결
+10. Frontend → Backend 연결
 
-Frontend URL
-→ 화면 기능 문서
-→ 종료
+Frontend 분석에서 Backend 호출이 발견되면
+다음 정보를 기록한다.
 
-사용자가 Action 선택
-→ Frontend 기능 문서
-→ 종료
+Frontend Action
+HTTP Method
+Backend URL
+호출 조건
+Request
+Response 처리 위치
 
-사용자가 API 선택
-→ API 규격 문서
-→ 종료
+이 정보는 이후 사용자가
+Backend 분석 대상을 선택할 때 사용한다.
 
-사용자가 Backend 분석 대상 선택
-→ Backend 기능 문서
-→ 종료
+예:
 
-Frontend 분석에서 Backend URL이 발견되어도
+FE-ACT-010-create
+Backend Calls:
+1.
+Method: POST
+URL: /material/create
+2.
+Method: POST
+URL: /material/history
+
+Frontend 분석 완료 후
 Backend 분석을 자동 실행하지 않는다.
 
-API 분석에서 Backend 구현 위치가 발견되어도
-Backend 분석을 자동 실행하지 않는다.
+사용자가 원하는 Backend URL을 선택한 후
+Backend 분석을 별도로 실행한다.
 
 ⸻
 
 11. Backend 분석 재구축 원칙
 
-Backend 분석은 성능과 정확성을 검증하면서
-독립적으로 구축한다.
+Backend 분석은
+성능과 정확성을 검증하면서 독립적으로 구축한다.
 
 CLAUDE.md에서는 다음을 강제하지 않는다.
 
@@ -409,12 +376,36 @@ CLAUDE.md에서는 다음을 강제하지 않는다.
 이러한 실행 전략은
 Backend 분석 Skill에서 관리한다.
 
-따라서 Backend 분석 방식을 변경하더라도
-Frontend / API 분석 구조에는 영향을 주지 않는다.
+Backend 분석 방식을 변경하더라도
+화면 분석과 Frontend 분석에는 영향을 주지 않는다.
 
 ⸻
 
-12. 핵심 원칙
+12. 기본 흐름
+
+Frontend URL
+      ↓
+SCREEN 분석
+      ↓
+Action ID 선택
+      ↓
+Frontend 분석
+      ↓
+HTTP Method + Backend URL 발견
+      ↓
+종료
+────────────────────────
+사용자가 Backend URL 선택
+      ↓
+Backend 분석
+      ↓
+Backend 문서
+      ↓
+종료
+
+⸻
+
+13. 핵심 원칙
 
 대상 선택
 → 필요한 범위만 탐색
