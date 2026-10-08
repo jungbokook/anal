@@ -3,3 +3,35 @@
 POST /generator/create
 GET /generator/status
 POST /generator/validate
+
+
+
+
+### Markdown 코드 블록 출력 강제
+
+다음 내용은 반드시 Markdown fenced code block으로 출력한다.
+
+- 한눈에 보는 실행 흐름
+- 전체 실행 Tree
+- Business Logic 상세 ASCII Block
+- DB 상세 ASCII Block
+- RFC / REST 상세 ASCII Block
+- Exception 상세 ASCII Block
+
+각 ASCII Block은 반드시 다음 구조를 사용한다.
+
+    ```text
+    ASCII 내용
+    ```
+
+Markdown H1 / H2 / H3 제목은 코드 블록 밖에 작성한다.
+
+코드 블록 시작 구분자와 종료 구분자를 반드시 함께 출력한다.
+
+서로 다른 상세 Block은 하나의 코드 블록으로 합치지 않는다.
+
+문서 저장 후 실제 파일을 Read하여 각 ASCII Block이 코드 블록으로 감싸졌는지 검증한다.
+
+누락된 코드 블록 구분자는 기존 분석 내용을 변경하지 않고 추가한다.
+
+검증 실패 시 SUCCESS를 반환하지 않는다.
