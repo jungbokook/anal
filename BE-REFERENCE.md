@@ -2105,3 +2105,199 @@ Excel 한 셀에 복사했을 때도
 
 Controller에서 시작하여
 최종 Response까지 연결되면 종료한다.
+
+
+---
+
+# 53. Markdown 제목 구조 및 검증 규칙
+
+최종 Backend 분석 문서는 Markdown 제목 계층을 반드시 사용한다.
+
+이 규칙은 기존 1~52번 규칙보다 문서 제목 표현에 한하여 우선한다.
+
+기존 ASCII Block, ASCII Tree, Business Logic 상세 수준,
+Excel 단일 셀 복사 형식은 변경하지 않는다.
+
+## 53.1 문서 최상위 제목
+
+최종 분석 문서의 첫 번째 제목은 반드시 H1으로 작성한다.
+
+형식:
+
+# Backend 분석 - {기능명}
+
+실제 기능명을 Source에서 확인할 수 없는 경우:
+
+# Backend 분석 - {HTTP Method} {Backend URL}
+
+기능명을 추측하여 작성하지 않는다.
+
+## 53.2 대항목 제목
+
+최종 문서의 대항목은 반드시 H2를 사용한다.
+
+형식:
+
+## 1. 기능 정보
+## 2. 기능 요약
+## 3. 한눈에 보는 실행 흐름
+## 4. 핵심 정보
+## 5. 전체 실행 Tree
+## 6. Business Logic 상세
+## 7. DB 상세
+## 8. 외부 연동 상세
+## 9. Exception / Transaction
+## 10. Response 생성
+## 11. Source Evidence
+## 12. 미확인 항목
+## 13. 분석 경계
+
+위 제목은 최종 문서의 출력 형식을 정의한다.
+
+실제 기능에 존재하지 않는 DB, RFC, REST 등의 상세 내용은
+제목을 채우기 위해 임의로 생성하지 않는다.
+
+출력되는 대항목에는 반드시 해당 H2 제목을 작성한다.
+
+항목을 생략하더라도 나머지 항목의 원래 번호는 유지한다.
+
+## 53.3 상세 제목
+
+개별 상세 Block에는 H3 제목을 사용한다.
+
+예:
+
+### Business Logic #1 : 요청값 검증
+
+### Business Logic #2 : 결과 처리
+
+### 조건 #1 : SAP 호출 여부
+
+### DB #1 : 설비 조회
+
+### RFC #1 : SAP 연동
+
+### REST #1 : 외부 상태 조회
+
+### Exception #1 : 외부 연동 실패
+
+실제 분석 결과에 존재하는 상세 Block에만 적용한다.
+
+번호와 처리명은 실제 분석 결과를 따른다.
+
+## 53.4 Markdown 제목과 ASCII Block의 관계
+
+Markdown 제목은 반드시 ASCII Block 밖에 작성한다.
+
+올바른 형식:
+
+## 6. Business Logic 상세
+
+### Business Logic #1 : 요청값 검증
+
+```text
+┌─ Business Logic #1 : 요청값 검증 ────────────
+│ 호출 위치
+│   실제 Source에서 확인된 Method
+│
+│ 처리 내용
+│   실제 Source에서 확인된 Validation
+│
+│ Evidence
+│   Project Root 상대경로:Line Range
+└──────────────────────────────────────────────
+```
+
+잘못된 형식:
+
+```text
+┌─ Business Logic 상세 ────────────────────────
+│ ...
+└──────────────────────────────────────────────
+```
+
+ASCII Block 내부에 제목이 있다는 이유로
+Markdown H2 또는 H3 제목을 생략하지 않는다.
+
+## 53.5 제목과 내용의 일치
+
+Markdown 제목과 ASCII Block의 번호 및 명칭은 일치해야 한다.
+
+예:
+
+### DB #2 : 상태 갱신
+
+```text
+┌─ DB #2 : 상태 갱신 ──────────────────────────
+│ ...
+└──────────────────────────────────────────────
+```
+
+Markdown 제목과 실제 Block이 서로 다른 번호를 사용하면 안 된다.
+
+DB / RFC / REST / Business Logic 번호를
+제목 검증 과정에서 다시 부여하지 않는다.
+
+## 53.6 제목 검증
+
+문서 작성 후 다음 항목을 확인한다.
+
+```text
+H1 문서 제목 존재
+↓
+출력된 대항목에 H2 제목 존재
+↓
+개별 상세 Block에 H3 제목 존재
+↓
+대항목 번호 및 순서 확인
+↓
+Markdown 제목과 ASCII Block 번호 일치
+↓
+제목 누락 여부 확인
+```
+
+제목이 누락되면 기존 분석 내용은 유지하고
+누락된 제목만 보완한다.
+
+제목 보완을 이유로 다음 작업을 수행하지 않는다.
+
+```text
+Backend Source 재분석
+Reference 재로드
+Controller 재검색
+Service 재검색
+Mapper 재검색
+MyBatis XML 재검색
+RFC / REST 재검색
+BE ID 재계산
+OUTPUT_PATH 변경
+```
+
+## 53.7 기존 분석 규칙 보호
+
+이 규칙은 최종 문서의 Markdown 제목 구조에만 적용한다.
+
+다음 기존 규칙은 변경하지 않는다.
+
+```text
+실제 Source 기반 분석
+실제 Call Path 순서 유지
+Local / private Method 추적
+Other Service / Common Service 추적
+Caller 복귀
+조건 / 분기 / 반복
+DB 호출 위치 보존
+MyBatis XML 위치 및 Statement ID까지만 확인
+SQL 분석 금지
+외부 연동 다중 호출 보존
+Response까지 추적
+Source Evidence
+Project Root 상대경로
+Excel 단일 셀 복사 형식
+ASCII Block 및 ASCII Tree
+Read-Only
+성능 보호 규칙
+```
+
+최종 문서의 제목을 보완하는 과정에서
+Business Logic 내용을 수정하거나 축약하지 않는다.
