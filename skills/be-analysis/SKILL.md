@@ -1,3 +1,4 @@
+
 ---
 name: be-analysis
 description: 화면명, FE Base Name, HTTP Method와 Backend URL을 기준으로 실제 Backend Call Path를 끝까지 추적하고 BE-REFERENCE 형식의 Backend 분석 문서를 생성한다. MyBatis는 XML 위치와 Statement ID까지만 확인하며 SQL은 분석하지 않는다.
@@ -1259,6 +1260,11 @@ OUTPUT_PATH도 분석 시작 전에 확정한다.
 실제 기능에 존재하지 않는 Block은
 억지로 생성하지 않는다.
 
+최종 출력 시 각 대항목은
+BE-REFERENCE의 Markdown H2 제목 형식을 사용한다.
+
+ASCII Block 제목만으로 대항목 제목을 대체하지 않는다.
+
 ---
 
 # 43. 한눈에 보는 실행 흐름
@@ -1512,7 +1518,11 @@ Evidence 확인
 ↓
 BE-REFERENCE 형식 적용
 ↓
+Markdown 제목 구조 적용
+↓
 OUTPUT_PATH에 문서 생성
+↓
+저장 후 Markdown 제목 검증
 ```
 
 현재 API에 존재하지 않는 항목은
@@ -1550,3 +1560,274 @@ docs/analysis/{화면명}/backend/{FE Base Name}-{BE ID}.md
 ```
 
 파일이 생성되면 종료한다.
+
+단, 문서 생성 직후 종료하지 않는다.
+
+아래 52번과 53번 규칙에 따른
+Markdown 제목 검증이 완료된 후 종료한다.
+
+---
+
+# 52. Markdown 제목 출력 강제
+
+최종 Backend 분석 문서는
+BE-REFERENCE의 Markdown 제목 규칙을 반드시 적용한다.
+
+이 규칙은 문서 제목 표현에 한하여
+기존 ASCII Block 표현 규칙보다 우선한다.
+
+## 52.1 최상위 제목
+
+문서 첫 번째 제목은 반드시 H1이다.
+
+형식:
+
+```text
+# Backend 분석 - {실제 확인된 기능명}
+```
+
+기능명을 실제 Source에서 확인할 수 없는 경우:
+
+```text
+# Backend 분석 - {HTTP Method} {Backend URL}
+```
+
+기능명을 추측하지 않는다.
+
+## 52.2 대항목 제목
+
+출력하는 모든 대항목은 반드시 H2를 사용한다.
+
+정확한 형식:
+
+```text
+## 1. 기능 정보
+## 2. 기능 요약
+## 3. 한눈에 보는 실행 흐름
+## 4. 핵심 정보
+## 5. 전체 실행 Tree
+## 6. Business Logic 상세
+## 7. DB 상세
+## 8. 외부 연동 상세
+## 9. Exception / Transaction
+## 10. Response 생성
+## 11. Source Evidence
+## 12. 미확인 항목
+## 13. 분석 경계
+```
+
+실제 출력하지 않는 대항목은 생략할 수 있다.
+
+단, 대항목을 생략하더라도
+나머지 대항목의 원래 번호는 변경하지 않는다.
+
+ASCII Block 내부에 대항목명이 있더라도
+H2 제목을 생략하지 않는다.
+
+## 52.3 상세 Block 제목
+
+개별 상세 Block은 H3 제목을 사용한다.
+
+예:
+
+```text
+### Business Logic #1 : 요청값 검증
+### 조건 #1 : SAP 호출 여부
+### DB #1 : 설비 조회
+### RFC #1 : SAP 연동
+### REST #1 : 외부 상태 조회
+### Exception #1 : RFC 호출 실패
+```
+
+위 내용은 형식 예시다.
+
+실제 출력 시에는
+Source에서 확인된 처리 내용만 사용한다.
+
+존재하지 않는 DB, RFC, REST 등의 Block을
+제목을 채우기 위해 생성하지 않는다.
+
+## 52.4 Markdown 제목과 ASCII Block
+
+최종 문서의 구조:
+
+```text
+H1 문서 제목
+↓
+H2 대항목
+↓
+H3 상세 제목
+↓
+ASCII Block 또는 ASCII Tree
+```
+
+Markdown 제목은
+반드시 코드 블록 밖에 작성한다.
+
+ASCII Block은
+기존 BE-REFERENCE 형식을 그대로 사용한다.
+
+Markdown 제목이 추가되었다는 이유로
+ASCII Block을 삭제하거나 간략화하지 않는다.
+
+## 52.5 번호 일치
+
+Markdown H3 제목과
+실제 상세 Block의 번호를 일치시킨다.
+
+예:
+
+```text
+### DB #2 : 상태 갱신
+```
+
+다음 ASCII Block도:
+
+```text
+DB #2
+```
+
+를 사용해야 한다.
+
+제목을 생성하면서
+DB / RFC / REST / Business Logic 번호를
+새로 계산하지 않는다.
+
+---
+
+# 53. 저장 후 Markdown 제목 검증
+
+이 단계는 최종 문서 생성 후 반드시 수행한다.
+
+## 53.1 실행 순서
+
+```text
+Backend Source 분석 완료
+↓
+BE-REFERENCE 형식 적용
+↓
+Markdown 제목 구조 적용
+↓
+OUTPUT_PATH에 Write
+↓
+OUTPUT_PATH Read
+↓
+Markdown 제목 검증
+↓
+누락된 제목만 보완
+↓
+필요한 경우 OUTPUT_PATH 재확인
+↓
+완료
+```
+
+## 53.2 검증 대상
+
+Write가 완료되면
+반드시 OUTPUT_PATH 파일을 Read한다.
+
+검증 항목:
+
+```text
+H1 제목 존재
+↓
+출력된 대항목마다 H2 제목 존재
+↓
+상세 Block마다 H3 제목 존재
+↓
+대항목 순서 확인
+↓
+대항목 번호 확인
+↓
+H3 제목과 ASCII Block 번호 일치
+↓
+ASCII Block 내부 제목만 존재하는 곳 확인
+```
+
+제목 검증은 Markdown 코드 블록 바깥의
+실제 Markdown Heading을 기준으로 한다.
+
+코드 블록 내부의 `#`, `##`, `###` 문자는
+Markdown 제목으로 인정하지 않는다.
+
+## 53.3 누락된 제목 보완
+
+제목이 누락되었다면
+기존 문서 내용은 유지하고
+누락된 Markdown 제목만 보완한다.
+
+허용:
+
+```text
+H1 제목 추가
+H2 제목 추가
+H3 제목 추가
+잘못된 제목 수준 수정
+제목 번호 일치 수정
+```
+
+금지:
+
+```text
+Business Logic 재작성
+전체 실행 Tree 재작성
+DB 호출 순서 변경
+RFC / REST 호출 순서 변경
+Response 내용 변경
+Evidence 내용 변경
+BE ID 변경
+OUTPUT_PATH 변경
+```
+
+## 53.4 성능 보호
+
+제목 검증을 위해
+Backend Source를 다시 분석하지 않는다.
+
+다음 작업을 수행하지 않는다.
+
+```text
+Reference 재로드
+Controller 재검색
+Service 재검색
+Mapper 재검색
+MyBatis XML 재검색
+RFC / REST 재검색
+Repository 전체 검색
+새로운 Subagent 실행
+```
+
+검증 대상은 현재 생성한 OUTPUT_PATH다.
+
+## 53.5 완료 조건
+
+다음 조건을 모두 만족해야 완료로 판단한다.
+
+```text
+OUTPUT_PATH 파일 존재
+↓
+H1 제목 정상
+↓
+출력된 H2 제목 정상
+↓
+상세 H3 제목 정상
+↓
+Markdown 제목과 ASCII Block 번호 일치
+↓
+기존 분석 내용 보존
+↓
+최종 완료
+```
+
+검증에 실패하면
+검증되지 않은 문서를 완료했다고 보고하지 않는다.
+
+단일 분석에서는
+검증 실패 원인을 사용자에게 보고한다.
+
+병렬 Worker에서는
+해당 Worker의 완료 검증 규칙에 따라
+SUCCESS 또는 FAILED를 반환한다.
+
+검증이 완료되면
+기존 51번 STOP 규칙에 따라 종료한다.
