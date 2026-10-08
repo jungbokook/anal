@@ -1,3 +1,4 @@
+
 ---
 name: be-analysis-parallel
 description: 하나의 FE Action에 연결된 여러 Backend URL의 BE ID와 OUTPUT_PATH를 먼저 확정하고, be-analysis-worker Subagent를 최대 2개씩 실제 병렬 실행하여 Backend 분석 문서를 생성한다.
@@ -50,7 +51,7 @@ Subagent가 담당한다.
 
 # 2. 기존 분석 엔진 보호
 
-다음 파일은 수정하지 않는다.
+다음 파일은 병렬 실행 과정에서 수정하지 않는다.
 
 ```text
 .claude/skills/be-analysis/SKILL.md
@@ -59,6 +60,9 @@ Subagent가 담당한다.
 
 현재 정상 동작하는 단일 Backend 분석 규칙을
 병렬 처리 때문에 변경하지 않는다.
+
+Markdown 제목 검증도
+기존 분석 엔진의 규칙을 사용한다.
 
 ---
 
@@ -123,6 +127,8 @@ be-analysis-worker 실행
 Worker 완료 대기
 
 생성 파일 존재 확인
+
+Worker Markdown 제목 검증 결과 확인
 
 최종 결과 출력
 ```
@@ -492,6 +498,19 @@ OUTPUT_PATH:
 docs/analysis/generator-add/backend/FE-ACT-010-create-BE-003.md
 ```
 
+Worker에게 추가로 다음 완료 조건을 전달한다.
+
+```text
+지정 OUTPUT_PATH에 문서를 생성한 후
+파일을 다시 Read하여 Markdown 제목을 검증한다.
+
+H1 / H2 / H3 제목 검증이 통과한 경우에만
+HEADING_CHECK: PASS를 반환한다.
+
+제목 검증이 실패하면
+STATUS: FAILED를 반환한다.
+```
+
 ---
 
 # 16. Worker Agent 지정
@@ -529,6 +548,9 @@ OUTPUT_PATH
 ```
 
 Worker가 위 값을 재계산하지 않는다.
+
+Markdown 제목 검증은
+해당 Skill의 저장 후 검증 규칙을 따른다.
 
 ---
 
@@ -590,10 +612,23 @@ Response까지 추적
 ↓
 BE-REFERENCE 적용
 ↓
+Markdown H1 / H2 / H3 적용
+↓
 지정 OUTPUT_PATH에 문서 생성
 ↓
-SUCCESS 또는 FAILED 반환
+OUTPUT_PATH 다시 Read
+↓
+Markdown 제목 검증
+↓
+누락 시 제목만 보완
+↓
+최종 제목 검증 통과
+↓
+SUCCESS 및 HEADING_CHECK: PASS 반환
 ```
+
+제목 검증이 통과하지 않은 Worker는
+SUCCESS를 반환할 수 없다.
 
 ---
 
@@ -643,6 +678,9 @@ Batch #2를 시작할 수 있다.
 
 실패 Task 때문에 성공 파일을 삭제하지 않는다.
 
+Markdown 제목 검증 실패도
+해당 Task의 FAILED 사유로 처리한다.
+
 ---
 
 # 23. 생성 파일 검증
@@ -657,10 +695,43 @@ Worker 완료 후 Main은
 파일명
 FE Base Name
 BE ID
+Worker STATUS
+Worker HEADING_CHECK
 ```
+
+Main은 다음 조건을 모두 만족한 경우에만
+해당 Task를 최종 SUCCESS로 인정한다.
+
+```text
+Worker STATUS: SUCCESS
+↓
+Worker HEADING_CHECK: PASS
+↓
+지정 OUTPUT_PATH 파일 존재
+↓
+파일명 일치
+↓
+FE Base Name 일치
+↓
+BE ID 일치
+↓
+최종 SUCCESS
+```
+
+Worker가 SUCCESS를 반환하더라도
+HEADING_CHECK가 누락되거나 PASS가 아니면
+최종 SUCCESS로 인정하지 않는다.
+
+이 경우 해당 Task는
+검증 실패로 처리하고 사유를 기록한다.
 
 Main이 Backend Source를 다시 분석해서
 Worker 결과를 검증하지 않는다.
+
+Main이 Reference를 다시 읽지 않는다.
+
+Main이 제목 검증을 위해
+Backend 문서를 재작성하지 않는다.
 
 ---
 
@@ -670,6 +741,9 @@ Worker 결과를 검증하지 않는다.
 다음 Batch에서 다시 분석하지 않는다.
 
 다음 Worker가 기존 성공 파일을 수정하면 안 된다.
+
+Markdown 제목 검증을 이유로
+다른 Task의 파일을 변경하지 않는다.
 
 ---
 
@@ -706,6 +780,7 @@ Worker 반환은 최소화한다.
 STATUS: SUCCESS
 BE ID: BE-003
 OUTPUT_PATH: ...
+HEADING_CHECK: PASS
 ```
 
 실패:
@@ -713,10 +788,13 @@ OUTPUT_PATH: ...
 ```text
 STATUS: FAILED
 BE ID: BE-003
+OUTPUT_PATH: ...
 REASON: ...
 ```
 
 Backend 상세 내용은 Markdown 파일에 저장한다.
+
+Main은 Worker의 검증 결과만 사용한다.
 
 ---
 
@@ -759,6 +837,12 @@ BE-006
 docs/analysis/generator-add/backend/FE-ACT-010-create-BE-006.md
 ```
 
+성공 건수에는
+Markdown 제목 검증까지 통과한 Task만 포함한다.
+
+검증에 실패한 Task는
+실패 건수에 포함하고 사유를 표시한다.
+
 ---
 
 # 28. 최종 검증
@@ -786,10 +870,21 @@ Batch 단위 완료 대기
 ↓
 모든 Task 상태 확인
 ↓
+Worker HEADING_CHECK 확인
+↓
+SUCCESS Task의 HEADING_CHECK: PASS 확인
+↓
 생성 파일 존재 확인
+↓
+최종 성공 / 실패 건수 확인
 ↓
 최종 결과 출력
 ```
+
+Main은 분석 내용 자체를 검증하지 않는다.
+
+Worker가 저장 후 검증을 담당하고
+Main은 Worker의 검증 상태를 확인한다.
 
 ---
 
@@ -815,4 +910,4 @@ SUCCESS
 FAILED
 ```
 
-가 되면 STOP 한다.
+가 되고, 각 SUCCESS Task의 Markdown 제목 검증 결과까지 확인하면 STOP 한다.
